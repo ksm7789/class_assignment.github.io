@@ -742,6 +742,76 @@
           .map(s => ({ ...s, score: calculateCategoryScore(s.id) }))
           .sort((a, b) => b.score - a.score);
 
+        // 운동부 학생 분산 배치 함수 (라운드 로빈 방식)
+        const distributeAthletes = (studentList, isMale) => {
+          // 운동부 학생과 일반 학생 분리
+          const athletes = studentList.filter(s => 
+            studentSpecialNotes[s.id]?.includes('운동부')
+          );
+          const nonAthletes = studentList.filter(s => 
+            !studentSpecialNotes[s.id]?.includes('운동부')
+          );
+
+          // 운동부 학생을 각 반에 순환 배치
+          let classIndex = 0;
+          for (let i = 0; i < athletes.length; i++) {
+            const student = athletes[i];
+            let assigned = false;
+            let attempts = 0;
+
+            // 같은 반 금지 학생 목록
+            const separateStudentIds = separatePairs
+              .filter(pair => pair.student1 === student.name || pair.student2 === student.name)
+              .map(pair => pair.student1 === student.name ? pair.student2 : pair.student1);
+
+            // 현재 반부터 시작해서 가능한 반 찾기
+            while (!assigned && attempts < numClasses) {
+              const cls = classes[classIndex];
+
+              // 같은 반 금지 확인
+              const hasSeparateStudent = cls.students.some(s => 
+                separateStudentIds.includes(s.name)
+              );
+
+              if (!hasSeparateStudent) {
+                cls.students.push(student);
+                cls.totalScore += student.score;
+                if (isMale) {
+                  cls.maleCount++;
+                } else {
+                  cls.femaleCount++;
+                }
+                assigned = true;
+              } else {
+                // 다음 반으로
+                classIndex = (classIndex + 1) % numClasses;
+                attempts++;
+              }
+            }
+
+            // 금지 조건 때문에 배정 못한 경우
+            if (!assigned) {
+              const sortedByCount = [...classes].sort((a, b) => a.students.length - b.students.length);
+              const lowestClass = sortedByCount[0];
+              lowestClass.students.push(student);
+              lowestClass.totalScore += student.score;
+              if (isMale) {
+                lowestClass.maleCount++;
+              } else {
+                lowestClass.femaleCount++;
+              }
+              assigned = true;
+            }
+
+            if (assigned) {
+              // 다음 반으로 이동 (라운드 로빈)
+              classIndex = (classIndex + 1) % numClasses;
+            }
+          }
+
+          return nonAthletes;
+        };
+
         // 스네이크 드래프트 방식 배정 함수
         const snakeDraftAssign = (studentList, isMale) => {
           let classIndex = 0;
@@ -819,11 +889,17 @@
           }
         };
 
-        // 남학생 먼저 배정
-        snakeDraftAssign(maleStudents, true);
+        // 1단계: 운동부 남학생 분산 배치 후 일반 남학생 반환
+        const nonAthleteMales = distributeAthletes(maleStudents, true);
         
-        // 여학생 배정
-        snakeDraftAssign(femaleStudents, false);
+        // 2단계: 운동부 여학생 분산 배치 후 일반 여학생 반환
+        const nonAthleteFemales = distributeAthletes(femaleStudents, false);
+
+        // 3단계: 일반 남학생 스네이크 드래프트 배정
+        snakeDraftAssign(nonAthleteMales, true);
+        
+        // 4단계: 일반 여학생 스네이크 드래프트 배정
+        snakeDraftAssign(nonAthleteFemales, false);
 
         // 각 반의 학생 수가 균등한지 확인 및 재조정
         const avgStudentsPerClass = students.length / numClasses;
