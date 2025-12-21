@@ -101,6 +101,15 @@
         padding: 0.4rem 0.6rem !important;
         font-size: 0.75rem !important;
       }
+      
+      /* 모바일에서 양식 다운로드 버튼 표시/숨김 */
+      .mobile-template-btn {
+        display: flex !important;
+      }
+      
+      .desktop-template-btn {
+        display: none !important;
+      }
     }
 
     /* 반응형 미디어 쿼리 - 태블릿 (769px-1024px) */
@@ -412,6 +421,8 @@
       const [selectedStudentsForSwap, setSelectedStudentsForSwap] = useState([]);
       const [isResultSaved, setIsResultSaved] = useState(false);
       const [isResultEditMode, setIsResultEditMode] = useState(false);
+      const [nameSortOrder, setNameSortOrder] = useState(null); // null, 'asc', 'desc'
+      const [genderSortOrder, setGenderSortOrder] = useState(null); // null, 'male-first', 'female-first'
 
       const specialNoteOptions = ['운동부', '도움반', '쌍생아', '다문화'];
 
@@ -451,11 +462,14 @@
 
           const formattedStudents = data.map((row, index) => ({
             id: index,
+            studentId: row['학생개인번호'] || '',
             name: row['이름'] || row['name'] || '',
             gender: row['성별'] || row['gender'] || '',
             grade: row['학년'] || row['grade'] || '',
-            originalClass: row['반'] || row['class'] || '',
-            number: row['번호'] || row['number'] || ''
+            originalClass: row['반'] || row['원래반'] || row['class'] || '',
+            number: row['번호'] || row['number'] || '',
+            birthDate: row['생년월일'] || '',
+            specialNote: row['특이사항'] || ''
           }));
 
           setStudents(formattedStudents);
@@ -468,9 +482,9 @@
       const downloadTemplate = () => {
         // 양식 데이터 생성
         const templateData = [
-          { '반': '1', '번호': '1', '이름': '홍길동', '성별': '남', '특이사항': '' },
-          { '반': '1', '번호': '2', '이름': '김영희', '성별': '여', '특이사항': '' },
-          { '반': '1', '번호': '3', '이름': '이철수', '성별': '남', '특이사항': '' },
+          { '학생개인번호': '2024001', '학년': '3', '반': '1', '번호': '1', '이름': '홍길동', '성별': '남', '생년월일': '2017-03-15', '특이사항': '', '원래반': '1', '배정반': '' },
+          { '학생개인번호': '2024002', '학년': '3', '반': '1', '번호': '2', '이름': '김영희', '성별': '여', '생년월일': '2017-05-20', '특이사항': '', '원래반': '1', '배정반': '' },
+          { '학생개인번호': '2024003', '학년': '3', '반': '1', '번호': '3', '이름': '이철수', '성별': '남', '생년월일': '2017-08-10', '특이사항': '', '원래반': '1', '배정반': '' },
         ];
 
         // 워크시트 생성
@@ -960,6 +974,59 @@
         setIsResultSaved(false);
         setIsResultEditMode(true);
         setSelectedStudentsForSwap([]);
+        setNameSortOrder(null); // 정렬 상태 초기화
+        setGenderSortOrder(null); // 정렬 상태 초기화
+      };
+
+      // 이름순 정렬 함수
+      const toggleNameSort = () => {
+        if (!results) return;
+
+        const newSortOrder = nameSortOrder === 'asc' ? 'desc' : 'asc';
+        setNameSortOrder(newSortOrder);
+        setGenderSortOrder(null); // 다른 정렬 초기화
+
+        const sortedResults = results.map(cls => ({
+          ...cls,
+          students: [...cls.students].sort((a, b) => {
+            if (newSortOrder === 'asc') {
+              return a.name.localeCompare(b.name, 'ko');
+            } else {
+              return b.name.localeCompare(a.name, 'ko');
+            }
+          })
+        }));
+
+        setResults(sortedResults);
+      };
+
+      // 성별순 정렬 함수
+      const toggleGenderSort = () => {
+        if (!results) return;
+
+        const newSortOrder = genderSortOrder === 'male-first' ? 'female-first' : 'male-first';
+        setGenderSortOrder(newSortOrder);
+        setNameSortOrder(null); // 다른 정렬 초기화
+
+        const sortedResults = results.map(cls => ({
+          ...cls,
+          students: [...cls.students].sort((a, b) => {
+            const aIsMale = a.gender === '남' || a.gender === 'M';
+            const bIsMale = b.gender === '남' || b.gender === 'M';
+
+            if (newSortOrder === 'male-first') {
+              if (aIsMale && !bIsMale) return -1;
+              if (!aIsMale && bIsMale) return 1;
+              return a.name.localeCompare(b.name, 'ko'); // 같은 성별 내에서는 이름순
+            } else {
+              if (!aIsMale && bIsMale) return -1;
+              if (aIsMale && !bIsMale) return 1;
+              return a.name.localeCompare(b.name, 'ko'); // 같은 성별 내에서는 이름순
+            }
+          })
+        }));
+
+        setResults(sortedResults);
       };
 
       const downloadExcel = () => {
@@ -973,11 +1040,15 @@
         results.forEach(cls => {
           cls.students.forEach(student => {
             originalData.push({
+              '학생개인번호': student.studentId || '',
+              '학년': student.grade || '',
               '반': student.originalClass || '',
               '번호': student.number || '',
               '이름': student.name,
               '성별': student.gender,
-              '특이사항': studentSpecialNotes[student.id]?.join(', ') || '',
+              '생년월일': student.birthDate || '',
+              '특이사항': studentSpecialNotes[student.id]?.join(', ') || student.specialNote || '',
+              '원래반': student.originalClass || '',
               '배정반': cls.name + '반'
             });
           });
@@ -993,11 +1064,15 @@
         // 각 반별 시트 생성
         results.forEach(cls => {
           const classData = cls.students.map(student => ({
+            '학생개인번호': student.studentId || '',
+            '학년': student.grade || '',
             '반': student.originalClass || '',
             '번호': student.number || '',
             '이름': student.name,
             '성별': student.gender,
-            '특이사항': studentSpecialNotes[student.id]?.join(', ') || ''
+            '생년월일': student.birthDate || '',
+            '특이사항': studentSpecialNotes[student.id]?.join(', ') || student.specialNote || '',
+            '원래반': student.originalClass || ''
           }));
           
           const classSheet = XLSX.utils.json_to_sheet(classData);
@@ -1108,6 +1183,7 @@
                     />
                     <button
                       onClick={downloadTemplate}
+                      className="desktop-template-btn"
                       style={{
                         padding: '0.75rem 1.25rem',
                         background: 'white',
@@ -1129,9 +1205,52 @@
                     </button>
                   </div>
                   {students.length > 0 && (
-                    <p style={{ marginTop: '1rem', fontSize: '0.9rem', opacity: 0.95 }}>
-                      ✓ {students.length}명의 학생 로드됨
-                    </p>
+                    <div style={{ 
+                      marginTop: '1rem', 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '0.75rem'
+                    }}>
+                      <p style={{ 
+                        fontSize: '0.9rem', 
+                        opacity: 0.95,
+                        margin: 0,
+                        flex: 1,
+                        minWidth: 0
+                      }}>
+                        ✓ {students.length}명의 학생 로드됨
+                      </p>
+                      <button
+                        onClick={downloadTemplate}
+                        className="mobile-template-btn"
+                        style={{
+                          padding: '0.5rem 0.75rem',
+                          background: 'rgba(255, 255, 255, 0.3)',
+                          color: 'white',
+                          border: '1px solid rgba(255, 255, 255, 0.5)',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          fontSize: '0.75rem',
+                          whiteSpace: 'nowrap',
+                          display: 'none',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          transition: 'all 0.2s',
+                          flexShrink: 0
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = 'rgba(255, 255, 255, 0.4)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = 'rgba(255, 255, 255, 0.3)';
+                        }}
+                      >
+                        <Download style={{ width: '14px', height: '14px' }} />
+                        양식
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -1828,7 +1947,9 @@
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: '1.5rem'
+                    marginBottom: '1.5rem',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
                   }}>
                     <h3 style={{
                       fontSize: '1.5rem',
@@ -1838,30 +1959,97 @@
                     }}>
                       반편성 결과
                     </h3>
-                    <button
-                      onClick={downloadExcel}
-                      title="엑셀 파일은 귀하의 기기에만 저장됩니다"
-                      style={{
-                        padding: '0.75rem 1.5rem',
-                        background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '12px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        fontSize: '0.95rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        boxShadow: '0 4px 12px rgba(17, 153, 142, 0.3)',
-                        transition: 'transform 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-                      onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-                    >
-                      <Download />
-                      엑셀 다운로드
-                    </button>
+                    
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: '0.75rem',
+                      flexWrap: 'wrap',
+                      alignItems: 'center'
+                    }}>
+                      {/* 가나다순 정렬 버튼 */}
+                      <button
+                        onClick={toggleNameSort}
+                        style={{
+                          padding: '0.75rem 1.25rem',
+                          background: nameSortOrder ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+                          color: nameSortOrder ? 'white' : '#667eea',
+                          border: nameSortOrder ? 'none' : '2px solid #667eea',
+                          borderRadius: '12px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          boxShadow: nameSortOrder ? '0 4px 12px rgba(102, 126, 234, 0.3)' : 'none',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.transform = 'scale(1.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.transform = 'scale(1)';
+                        }}
+                      >
+                        {nameSortOrder === 'asc' ? '🔼' : nameSortOrder === 'desc' ? '🔽' : '🔤'}
+                        가나다분류
+                      </button>
+
+                      {/* 성별순 정렬 버튼 */}
+                      <button
+                        onClick={toggleGenderSort}
+                        style={{
+                          padding: '0.75rem 1.25rem',
+                          background: genderSortOrder ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' : 'white',
+                          color: genderSortOrder ? 'white' : '#f5576c',
+                          border: genderSortOrder ? 'none' : '2px solid #f5576c',
+                          borderRadius: '12px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          boxShadow: genderSortOrder ? '0 4px 12px rgba(245, 87, 108, 0.3)' : 'none',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.transform = 'scale(1.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.transform = 'scale(1)';
+                        }}
+                      >
+                        {genderSortOrder === 'male-first' ? '👦👧' : genderSortOrder === 'female-first' ? '👧👦' : '⚥'}
+                        성별분류
+                      </button>
+
+                      {/* 엑셀 다운로드 버튼 */}
+                      <button
+                        onClick={downloadExcel}
+                        title="엑셀 파일은 귀하의 기기에만 저장됩니다"
+                        style={{
+                          padding: '0.75rem 1.5rem',
+                          background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '12px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          fontSize: '0.95rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          boxShadow: '0 4px 12px rgba(17, 153, 142, 0.3)',
+                          transition: 'transform 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
+                        onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                      >
+                        <Download />
+                        엑셀 다운로드
+                      </button>
+                    </div>
                   </div>
 
                   <div style={{
