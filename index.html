@@ -103,7 +103,11 @@
       }
       
       /* 모바일에서 양식 다운로드 버튼 표시/숨김 */
-      .mobile-template-btn {
+      .mobile-template-btn-before {
+        display: flex !important;
+      }
+      
+      .mobile-template-btn-after {
         display: flex !important;
       }
       
@@ -586,6 +590,9 @@
         }
         
         setStudentSpecialNotes(newNotes);
+        
+        // 특이사항 선택 후 드롭다운 자동으로 닫기
+        setActiveSpecialNoteDropdown(null);
       };
 
       const toggleInputComplete = () => {
@@ -974,8 +981,8 @@
         setIsResultSaved(false);
         setIsResultEditMode(true);
         setSelectedStudentsForSwap([]);
-        setNameSortOrder(null); // 정렬 상태 초기화
-        setGenderSortOrder(null); // 정렬 상태 초기화
+        setNameSortOrder(null);
+        setGenderSortOrder(null);
       };
 
       // 이름순 정렬 함수
@@ -984,7 +991,7 @@
 
         const newSortOrder = nameSortOrder === 'asc' ? 'desc' : 'asc';
         setNameSortOrder(newSortOrder);
-        setGenderSortOrder(null); // 다른 정렬 초기화
+        setGenderSortOrder(null);
 
         const sortedResults = results.map(cls => ({
           ...cls,
@@ -1006,7 +1013,7 @@
 
         const newSortOrder = genderSortOrder === 'male-first' ? 'female-first' : 'male-first';
         setGenderSortOrder(newSortOrder);
-        setNameSortOrder(null); // 다른 정렬 초기화
+        setNameSortOrder(null);
 
         const sortedResults = results.map(cls => ({
           ...cls,
@@ -1017,11 +1024,11 @@
             if (newSortOrder === 'male-first') {
               if (aIsMale && !bIsMale) return -1;
               if (!aIsMale && bIsMale) return 1;
-              return a.name.localeCompare(b.name, 'ko'); // 같은 성별 내에서는 이름순
+              return a.name.localeCompare(b.name, 'ko');
             } else {
               if (!aIsMale && bIsMale) return -1;
               if (aIsMale && !bIsMale) return 1;
-              return a.name.localeCompare(b.name, 'ko'); // 같은 성별 내에서는 이름순
+              return a.name.localeCompare(b.name, 'ko');
             }
           })
         }));
@@ -1204,10 +1211,44 @@
                       양식 다운로드
                     </button>
                   </div>
+                  
+                  {/* 스마트폰용 양식 다운로드 버튼 (학생 로드 전) */}
+                  {students.length === 0 && (
+                    <button
+                      onClick={downloadTemplate}
+                      className="mobile-template-btn-before"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        background: 'rgba(255, 255, 255, 0.3)',
+                        color: 'white',
+                        border: '1px solid rgba(255, 255, 255, 0.5)',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '0.9rem',
+                        display: 'none',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = 'rgba(255, 255, 255, 0.4)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = 'rgba(255, 255, 255, 0.3)';
+                      }}
+                    >
+                      <Download style={{ width: '16px', height: '16px' }} />
+                      양식 다운로드
+                    </button>
+                  )}
+                  
                   {students.length > 0 && (
                     <div style={{ 
-                      marginTop: '1rem', 
-                      display: 'flex', 
+                      marginTop: '1rem',
+                      display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       gap: '0.75rem'
@@ -1221,9 +1262,10 @@
                       }}>
                         ✓ {students.length}명의 학생 로드됨
                       </p>
+                      {/* 스마트폰용 작은 양식 버튼 (학생 로드 후) */}
                       <button
                         onClick={downloadTemplate}
-                        className="mobile-template-btn"
+                        className="mobile-template-btn-after"
                         style={{
                           padding: '0.5rem 0.75rem',
                           background: 'rgba(255, 255, 255, 0.3)',
