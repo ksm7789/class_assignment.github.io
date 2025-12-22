@@ -102,6 +102,12 @@
         font-size: 0.75rem !important;
       }
       
+      /* 모바일에서 파일 업로드 레이아웃 변경 */
+      .upload-container {
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+      }
+      
       /* 모바일에서 양식 다운로드 버튼 표시/숨김 */
       .mobile-template-btn-before {
         display: flex !important;
@@ -1172,7 +1178,7 @@
                       학생 명렬표 업로드
                     </h3>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div className="upload-container" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
                     <input
                       type="file"
                       accept=".xlsx,.xls"
