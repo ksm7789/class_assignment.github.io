@@ -696,6 +696,46 @@
         alert(`${student1.name}과(와) ${student2.name}의 반이 교체되었습니다.`);
       };
 
+      const moveStudentToClass = (student, targetClassName) => {
+        const sourceClassName = student.className;
+        
+        if (sourceClassName === targetClassName) {
+          alert('이미 해당 반에 속해 있습니다.');
+          setSelectedStudentsForSwap([]);
+          return;
+        }
+
+        const newResults = results.map(cls => {
+          if (cls.name === sourceClassName) {
+            // 원래 반에서 학생 제거
+            const newStudents = cls.students.filter(s => s.id !== student.id);
+            const isMale = student.gender === '남' || student.gender === 'M';
+            
+            return {
+              ...cls,
+              students: newStudents,
+              maleCount: isMale ? cls.maleCount - 1 : cls.maleCount,
+              femaleCount: !isMale ? cls.femaleCount - 1 : cls.femaleCount
+            };
+          } else if (cls.name === targetClassName) {
+            // 목표 반에 학생 추가
+            const isMale = student.gender === '남' || student.gender === 'M';
+            
+            return {
+              ...cls,
+              students: [...cls.students, student],
+              maleCount: isMale ? cls.maleCount + 1 : cls.maleCount,
+              femaleCount: !isMale ? cls.femaleCount + 1 : cls.femaleCount
+            };
+          }
+          return cls;
+        });
+
+        setResults(newResults);
+        setSelectedStudentsForSwap([]);
+        alert(`${student.name} 학생이 ${sourceClassName}반에서 ${targetClassName}반으로 이동되었습니다.`);
+      };
+
       const toggleResultSave = () => {
         if (!isResultSaved) {
           // 결과 저장
@@ -2334,15 +2374,84 @@
                     
                     {isResultEditMode && selectedStudentsForSwap.length > 0 && (
                       <div style={{
-                        marginTop: '1rem',
-                        padding: '0.75rem',
-                        background: '#fff3cd',
-                        borderRadius: '8px',
-                        fontSize: '0.95rem',
-                        color: '#856404',
-                        display: 'inline-block'
+                        marginTop: '1.5rem',
+                        padding: '1.5rem',
+                        background: selectedStudentsForSwap.length === 1 ? '#e3f2fd' : '#fff3cd',
+                        borderRadius: '12px',
+                        textAlign: 'center'
                       }}>
-                        ✓ {selectedStudentsForSwap.length}명 선택됨 - {2 - selectedStudentsForSwap.length}명 더 선택하여 반 교체
+                        {selectedStudentsForSwap.length === 1 ? (
+                          <div>
+                            <div style={{ 
+                              fontSize: '1rem',
+                              color: '#1976d2',
+                              fontWeight: '600',
+                              marginBottom: '1rem'
+                            }}>
+                              📌 {selectedStudentsForSwap[0].name} 학생을 이동시킬 반을 선택하세요
+                            </div>
+                            <div style={{
+                              display: 'flex',
+                              gap: '0.75rem',
+                              justifyContent: 'center',
+                              flexWrap: 'wrap'
+                            }}>
+                              {results
+                                .filter(cls => cls.name !== selectedStudentsForSwap[0].className)
+                                .map(cls => (
+                                  <button
+                                    key={cls.name}
+                                    onClick={() => {
+                                      moveStudentToClass(selectedStudentsForSwap[0], cls.name);
+                                    }}
+                                    style={{
+                                      padding: '0.75rem 1.5rem',
+                                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      fontSize: '0.95rem',
+                                      fontWeight: '600',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+                                      transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.target.style.transform = 'scale(1.05)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.target.style.transform = 'scale(1)';
+                                    }}
+                                  >
+                                    {cls.name}반으로 이동
+                                  </button>
+                                ))}
+                            </div>
+                            <button
+                              onClick={() => setSelectedStudentsForSwap([])}
+                              style={{
+                                marginTop: '1rem',
+                                padding: '0.5rem 1rem',
+                                background: 'white',
+                                color: '#666',
+                                border: '1px solid #ddd',
+                                borderRadius: '6px',
+                                fontSize: '0.85rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              취소
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ 
+                            fontSize: '0.95rem',
+                            color: '#856404',
+                            fontWeight: '600'
+                          }}>
+                            ✓ {selectedStudentsForSwap.length}명 선택됨 - {2 - selectedStudentsForSwap.length}명 더 선택하여 반 교체
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
