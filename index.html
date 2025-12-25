@@ -675,12 +675,12 @@
               ...cls,
               students: cls.students.map(s => s.id === student1.id ? student2 : s),
               maleCount: cls.students.filter(s => {
-                if (s.id === student1.id) return student2.gender === '남' || student2.gender === 'M';
-                return s.gender === '남' || s.gender === 'M';
+                if (s.id === student1.id) return student2.gender === '남성' || student2.gender === '남' || student2.gender === 'M';
+                return s.gender === '남성' || s.gender === '남' || s.gender === 'M';
               }).length,
               femaleCount: cls.students.filter(s => {
-                if (s.id === student1.id) return student2.gender === '여' || student2.gender === 'F';
-                return s.gender === '여' || s.gender === 'F';
+                if (s.id === student1.id) return student2.gender === '여성' || student2.gender === '여' || student2.gender === 'F';
+                return s.gender === '여성' || s.gender === '여' || s.gender === 'F';
               }).length
             };
           } else if (cls.name === student2.className) {
@@ -689,12 +689,12 @@
               ...cls,
               students: cls.students.map(s => s.id === student2.id ? student1 : s),
               maleCount: cls.students.filter(s => {
-                if (s.id === student2.id) return student1.gender === '남' || student1.gender === 'M';
-                return s.gender === '남' || s.gender === 'M';
+                if (s.id === student2.id) return student1.gender === '남성' || student1.gender === '남' || student1.gender === 'M';
+                return s.gender === '남성' || s.gender === '남' || s.gender === 'M';
               }).length,
               femaleCount: cls.students.filter(s => {
-                if (s.id === student2.id) return student1.gender === '여' || student1.gender === 'F';
-                return s.gender === '여' || s.gender === 'F';
+                if (s.id === student2.id) return student1.gender === '여성' || student1.gender === '여' || student1.gender === 'F';
+                return s.gender === '여성' || s.gender === '여' || s.gender === 'F';
               }).length
             };
           }
@@ -1074,8 +1074,8 @@
         const sortedResults = results.map(cls => ({
           ...cls,
           students: [...cls.students].sort((a, b) => {
-            const aIsMale = a.gender === '남' || a.gender === 'M';
-            const bIsMale = b.gender === '남' || b.gender === 'M';
+            const aIsMale = a.gender === '남성' || a.gender === '남' || a.gender === 'M';
+            const bIsMale = b.gender === '남성' || b.gender === '남' || b.gender === 'M';
 
             if (newSortOrder === 'male-first') {
               if (aIsMale && !bIsMale) return -1;
