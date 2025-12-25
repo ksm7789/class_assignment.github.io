@@ -470,17 +470,27 @@
           const sheet = workbook.Sheets[sheetName];
           const data = XLSX.utils.sheet_to_json(sheet);
 
-          const formattedStudents = data.map((row, index) => ({
-            id: index,
-            studentId: row['학생개인번호'] || '',
-            name: row['이름'] || row['name'] || '',
-            gender: row['성별'] || row['gender'] || '',
-            grade: row['학년'] || row['grade'] || '',
-            originalClass: row['반'] || row['원래반'] || row['class'] || '',
-            number: row['번호'] || row['number'] || '',
-            birthDate: row['생년월일'] || '',
-            specialNote: row['특이사항'] || ''
-          }));
+          const formattedStudents = data.map((row, index) => {
+            // 성별 정규화: 남/M → 남성, 여/F → 여성
+            let gender = row['성별'] || row['gender'] || '';
+            if (gender === '남' || gender === 'M') {
+              gender = '남성';
+            } else if (gender === '여' || gender === 'F') {
+              gender = '여성';
+            }
+            
+            return {
+              id: index,
+              studentId: row['학생개인번호'] || '',
+              name: row['이름'] || row['name'] || '',
+              gender: gender,
+              grade: row['학년'] || row['grade'] || '',
+              originalClass: row['반'] || row['원래반'] || row['class'] || '',
+              number: row['번호'] || row['number'] || '',
+              birthDate: row['생년월일'] || '',
+              specialNote: row['특이사항'] || ''
+            };
+          });
 
           setStudents(formattedStudents);
           setStudentScores({});
@@ -492,9 +502,9 @@
       const downloadTemplate = () => {
         // 양식 데이터 생성
         const templateData = [
-          { '학생개인번호': '2024001', '학년': '3', '반': '1', '번호': '1', '이름': '홍길동', '성별': '남', '생년월일': '2017-03-15', '특이사항': '', '원래반': '1', '배정반': '' },
-          { '학생개인번호': '2024002', '학년': '3', '반': '1', '번호': '2', '이름': '김영희', '성별': '여', '생년월일': '2017-05-20', '특이사항': '', '원래반': '1', '배정반': '' },
-          { '학생개인번호': '2024003', '학년': '3', '반': '1', '번호': '3', '이름': '이철수', '성별': '남', '생년월일': '2017-08-10', '특이사항': '', '원래반': '1', '배정반': '' },
+          { '학생개인번호': '2024001', '학년': '3', '반': '1', '번호': '1', '이름': '홍길동', '성별': '남성', '생년월일': '2017-03-15', '특이사항': '', '원래반': '1', '배정반': '' },
+          { '학생개인번호': '2024002', '학년': '3', '반': '1', '번호': '2', '이름': '김영희', '성별': '여성', '생년월일': '2017-05-20', '특이사항': '', '원래반': '1', '배정반': '' },
+          { '학생개인번호': '2024003', '학년': '3', '반': '1', '번호': '3', '이름': '이철수', '성별': '남성', '생년월일': '2017-08-10', '특이사항': '', '원래반': '1', '배정반': '' },
         ];
 
         // 워크시트 생성
@@ -709,7 +719,7 @@
           if (cls.name === sourceClassName) {
             // 원래 반에서 학생 제거
             const newStudents = cls.students.filter(s => s.id !== student.id);
-            const isMale = student.gender === '남' || student.gender === 'M';
+            const isMale = student.gender === '남성' || student.gender === '남' || student.gender === 'M';
             
             return {
               ...cls,
@@ -719,7 +729,7 @@
             };
           } else if (cls.name === targetClassName) {
             // 목표 반에 학생 추가
-            const isMale = student.gender === '남' || student.gender === 'M';
+            const isMale = student.gender === '남성' || student.gender === '남' || student.gender === 'M';
             
             return {
               ...cls,
@@ -800,12 +810,12 @@
 
         // 남녀 학생 분리 및 점수 순 정렬 (높은 점수 -> 낮은 점수)
         const maleStudents = students
-          .filter(s => s.gender === '남' || s.gender === 'M')
+          .filter(s => s.gender === '남성' || s.gender === '남' || s.gender === 'M')
           .map(s => ({ ...s, score: calculateCategoryScore(s.id) }))
           .sort((a, b) => b.score - a.score);
 
         const femaleStudents = students
-          .filter(s => s.gender === '여' || s.gender === 'F')
+          .filter(s => s.gender === '여성' || s.gender === '여' || s.gender === 'F')
           .map(s => ({ ...s, score: calculateCategoryScore(s.id) }))
           .sort((a, b) => b.score - a.score);
 
@@ -1005,7 +1015,7 @@
                 smallest.students.push(student);
                 
                 // 카운트 업데이트
-                if (student.gender === '남' || student.gender === 'M') {
+                if (student.gender === '남성' || student.gender === '남' || student.gender === 'M') {
                   largest.maleCount--;
                   smallest.maleCount++;
                 } else {
@@ -1568,12 +1578,12 @@
                               <span style={{
                                 padding: '0.2rem 0.5rem',
                                 borderRadius: '8px',
-                                background: student.gender === '남' || student.gender === 'M' ? '#e3f2fd' : '#fce4ec',
-                                color: student.gender === '남' || student.gender === 'M' ? '#1976d2' : '#c2185b',
+                                background: student.gender === '남성' || student.gender === '남' || student.gender === 'M' ? '#e3f2fd' : '#fce4ec',
+                                color: student.gender === '남성' || student.gender === '남' || student.gender === 'M' ? '#1976d2' : '#c2185b',
                                 fontWeight: '600',
                                 fontSize: '0.8rem'
                               }}>
-                                {student.gender}
+                                {student.gender === '남성' || student.gender === '남' || student.gender === 'M' ? '남성' : '여성'}
                               </span>
                             </td>
                             {categories.map(cat => {
@@ -2177,7 +2187,7 @@
                           fontWeight: '600'
                         }}>
                           <div>총 {cls.students.length}명</div>
-                          <div>남 {cls.maleCount}명 / 여 {cls.femaleCount}명</div>
+                          <div>남성 {cls.maleCount}명 / 여성 {cls.femaleCount}명</div>
                         </div>
 
                         <div style={{
@@ -2287,12 +2297,12 @@
                                 <span style={{
                                   padding: '0.25rem 0.5rem',
                                   borderRadius: '8px',
-                                  background: student.gender === '남' || student.gender === 'M' ? '#e3f2fd' : '#fce4ec',
-                                  color: student.gender === '남' || student.gender === 'M' ? '#1976d2' : '#c2185b',
+                                  background: student.gender === '남성' || student.gender === '남' || student.gender === 'M' ? '#e3f2fd' : '#fce4ec',
+                                  color: student.gender === '남성' || student.gender === '남' || student.gender === 'M' ? '#1976d2' : '#c2185b',
                                   fontSize: '0.85rem',
                                   fontWeight: '600'
                                 }}>
-                                  {student.gender}
+                                  {student.gender === '남성' || student.gender === '남' || student.gender === 'M' ? '남성' : '여성'}
                                 </span>
                               </div>
                             );
