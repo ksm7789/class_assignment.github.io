@@ -433,10 +433,11 @@
       const [isResultEditMode, setIsResultEditMode] = useState(false);
       const [nameSortOrder, setNameSortOrder] = useState(null); // null, 'asc', 'desc'
       const [genderSortOrder, setGenderSortOrder] = useState(null); // null, 'male-first', 'female-first'
+      const [uploadedFileName, setUploadedFileName] = useState('');
 
       const specialNoteOptions = ['운동부', '도움반', '쌍생아', '다문화'];
 
-      // 페이지 새로고침/종료 시 경고
+      // 페이지 새로고침 경고
       React.useEffect(() => {
         const handleBeforeUnload = (e) => {
           if (students.length > 0) {
@@ -454,6 +455,13 @@
         };
       }, [students]);
 
+      // 초기화 함수 (모든 데이터 삭제)
+      const resetAll = () => {
+        if (confirm('모든 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+          window.location.reload();
+        }
+      };
+
       const categoryExamples = [
         '성적', '학습태도', '교우관계', '리더십', 
         '협동성', '주의집중력', '책임감', '사회성'
@@ -462,6 +470,9 @@
       const handleFileUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        // 파일명 저장
+        setUploadedFileName(file.name);
 
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -518,6 +529,7 @@
           setIsResultEditMode(false);
           setNameSortOrder(null);
           setGenderSortOrder(null);
+          setUploadedFileName('');
         }
       };
 
@@ -841,76 +853,6 @@
           .map(s => ({ ...s, score: calculateCategoryScore(s.id) }))
           .sort((a, b) => b.score - a.score);
 
-        // 운동부 학생 분산 배치 함수 (라운드 로빈 방식)
-        const distributeAthletes = (studentList, isMale) => {
-          // 운동부 학생과 일반 학생 분리
-          const athletes = studentList.filter(s => 
-            studentSpecialNotes[s.id]?.includes('운동부')
-          );
-          const nonAthletes = studentList.filter(s => 
-            !studentSpecialNotes[s.id]?.includes('운동부')
-          );
-
-          // 운동부 학생을 각 반에 순환 배치
-          let classIndex = 0;
-          for (let i = 0; i < athletes.length; i++) {
-            const student = athletes[i];
-            let assigned = false;
-            let attempts = 0;
-
-            // 같은 반 금지 학생 목록
-            const separateStudentIds = separatePairs
-              .filter(pair => pair.student1 === student.name || pair.student2 === student.name)
-              .map(pair => pair.student1 === student.name ? pair.student2 : pair.student1);
-
-            // 현재 반부터 시작해서 가능한 반 찾기
-            while (!assigned && attempts < numClasses) {
-              const cls = classes[classIndex];
-
-              // 같은 반 금지 확인
-              const hasSeparateStudent = cls.students.some(s => 
-                separateStudentIds.includes(s.name)
-              );
-
-              if (!hasSeparateStudent) {
-                cls.students.push(student);
-                cls.totalScore += student.score;
-                if (isMale) {
-                  cls.maleCount++;
-                } else {
-                  cls.femaleCount++;
-                }
-                assigned = true;
-              } else {
-                // 다음 반으로
-                classIndex = (classIndex + 1) % numClasses;
-                attempts++;
-              }
-            }
-
-            // 금지 조건 때문에 배정 못한 경우
-            if (!assigned) {
-              const sortedByCount = [...classes].sort((a, b) => a.students.length - b.students.length);
-              const lowestClass = sortedByCount[0];
-              lowestClass.students.push(student);
-              lowestClass.totalScore += student.score;
-              if (isMale) {
-                lowestClass.maleCount++;
-              } else {
-                lowestClass.femaleCount++;
-              }
-              assigned = true;
-            }
-
-            if (assigned) {
-              // 다음 반으로 이동 (라운드 로빈)
-              classIndex = (classIndex + 1) % numClasses;
-            }
-          }
-
-          return nonAthletes;
-        };
-
         // 스네이크 드래프트 방식 배정 함수
         const snakeDraftAssign = (studentList, isMale) => {
           let classIndex = 0;
@@ -988,17 +930,88 @@
           }
         };
 
-        // 1단계: 운동부 남학생 분산 배치 후 일반 남학생 반환
-        const nonAthleteMales = distributeAthletes(maleStudents, true);
+        // 1단계: 남학생을 스네이크 드래프트로 균등 배치
+        snakeDraftAssign(maleStudents, true);
         
-        // 2단계: 운동부 여학생 분산 배치 후 일반 여학생 반환
-        const nonAthleteFemales = distributeAthletes(femaleStudents, false);
+        // 2단계: 여학생을 스네이크 드래프트로 균등 배치
+        snakeDraftAssign(femaleStudents, false);
 
-        // 3단계: 일반 남학생 스네이크 드래프트 배정
-        snakeDraftAssign(nonAthleteMales, true);
+        // 3단계: 운동부 학생 재배치 (성비 유지하면서 균등 분배)
+        const redistributeAthletes = () => {
+          // 각 반의 운동부 학생 수 계산
+          const athleteCounts = classes.map(cls => ({
+            className: cls.name,
+            count: cls.students.filter(s => studentSpecialNotes[s.id]?.includes('운동부')).length
+          }));
+
+          // 운동부 학생이 많은 반과 적은 반 찾기
+          let maxAthleteClass = athleteCounts.reduce((max, c) => c.count > max.count ? c : max);
+          let minAthleteClass = athleteCounts.reduce((min, c) => c.count < min.count ? c : min);
+
+          // 차이가 2명 이상이면 재배치
+          let attempts = 0;
+          while (maxAthleteClass.count - minAthleteClass.count >= 2 && attempts < 20) {
+            attempts++;
+            
+            const fromClass = classes.find(c => c.name === maxAthleteClass.className);
+            const toClass = classes.find(c => c.name === minAthleteClass.className);
+            
+            // 운동부 학생 중 교환 가능한 학생 찾기
+            const fromAthletes = fromClass.students.filter(s => studentSpecialNotes[s.id]?.includes('운동부'));
+            const toNonAthletes = toClass.students.filter(s => !studentSpecialNotes[s.id]?.includes('운동부'));
+            
+            let swapped = false;
+            for (let athlete of fromAthletes) {
+              // 같은 성별의 비운동부 학생 찾기
+              const matchingNonAthlete = toNonAthletes.find(s => {
+                const sameGender = (athlete.gender === '남성' || athlete.gender === '남' || athlete.gender === 'M') === 
+                                   (s.gender === '남성' || s.gender === '남' || s.gender === 'M');
+                
+                // 같은 반 금지 확인
+                const athleteSeparate = separatePairs
+                  .filter(pair => pair.student1 === athlete.name || pair.student2 === athlete.name)
+                  .map(pair => pair.student1 === athlete.name ? pair.student2 : pair.student1);
+                
+                const nonAthleteSeparate = separatePairs
+                  .filter(pair => pair.student1 === s.name || pair.student2 === s.name)
+                  .map(pair => pair.student1 === s.name ? pair.student2 : pair.student1);
+                
+                const athleteCanMove = !toClass.students.some(st => athleteSeparate.includes(st.name));
+                const nonAthleteCanMove = !fromClass.students.some(st => nonAthleteSeparate.includes(st.name));
+                
+                return sameGender && athleteCanMove && nonAthleteCanMove;
+              });
+              
+              if (matchingNonAthlete) {
+                // 두 학생 교환
+                const athleteIdx = fromClass.students.findIndex(s => s.id === athlete.id);
+                const nonAthleteIdx = toClass.students.findIndex(s => s.id === matchingNonAthlete.id);
+                
+                fromClass.students[athleteIdx] = matchingNonAthlete;
+                toClass.students[nonAthleteIdx] = athlete;
+                
+                // 점수 조정
+                fromClass.totalScore = fromClass.totalScore - athlete.score + matchingNonAthlete.score;
+                toClass.totalScore = toClass.totalScore - matchingNonAthlete.score + athlete.score;
+                
+                swapped = true;
+                break;
+              }
+            }
+            
+            if (!swapped) break;
+            
+            // 운동부 카운트 재계산
+            athleteCounts.forEach(ac => {
+              const cls = classes.find(c => c.name === ac.className);
+              ac.count = cls.students.filter(s => studentSpecialNotes[s.id]?.includes('운동부')).length;
+            });
+            
+            maxAthleteClass = athleteCounts.reduce((max, c) => c.count > max.count ? c : max);
+            minAthleteClass = athleteCounts.reduce((min, c) => c.count < min.count ? c : min);
+          }
+        };
         
-        // 4단계: 일반 여학생 스네이크 드래프트 배정
-        snakeDraftAssign(nonAthleteFemales, false);
 
         // 각 반의 학생 수가 균등한지 확인 및 재조정
         const avgStudentsPerClass = students.length / numClasses;
@@ -1183,23 +1196,28 @@
             setActiveSpecialNoteDropdown(null);
           }}
         >
-          <div 
-            style={{
-              maxWidth: '1400px',
-              margin: '0 auto',
-              background: 'rgba(255, 255, 255, 0.98)',
-              borderRadius: '24px',
-              boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
-              overflow: 'hidden'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 헤더 */}
-            <div style={{
-              background: 'linear-gradient(135deg, #5f72e4 0%, #6d5ca6 100%)',
-              padding: '3rem 2rem',
-              position: 'relative',
-              overflow: 'hidden',
+
+          {/* 메인 컨테이너 래퍼 */}
+          <div style={{
+            maxWidth: '1400px',
+            margin: '0 auto',
+            position: 'relative'
+          }}>
+            <div 
+              style={{
+                background: 'rgba(255, 255, 255, 0.98)',
+                borderRadius: '24px',
+                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+                overflow: 'hidden'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 헤더 */}
+              <div style={{
+                background: 'linear-gradient(135deg, #5f72e4 0%, #6d5ca6 100%)',
+                padding: '3rem 2rem',
+                position: 'relative',
+                overflow: 'hidden',
               textAlign: 'center'
             }}>
               <div style={{
@@ -1226,6 +1244,45 @@
                 marginTop: '0.5rem',
                 position: 'relative'
               }}>학생 특성을 고려한 균형잡힌 반편성</p>
+              
+              {/* 초기화 버튼 (헤더 안쪽 하단 오른쪽) */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                paddingTop: '1.5rem',
+                position: 'relative'
+              }}>
+                <button
+                  onClick={resetAll}
+                  style={{
+                    padding: '0.6rem 1.2rem',
+                    background: 'white',
+                    color: '#667eea',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#f8f9fa';
+                    e.target.style.transform = 'scale(1.05)';
+                    e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'white';
+                    e.target.style.transform = 'scale(1)';
+                    e.target.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.1)';
+                  }}
+                >
+                  🔄 초기화
+                </button>
+              </div>
             </div>
 
             <div style={{ padding: '2rem' }}>
@@ -1250,22 +1307,50 @@
                       학생 명렬표 업로드
                     </h3>
                   </div>
-                  <div className="upload-container" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls"
-                      onChange={handleFileUpload}
-                      style={{
-                        flex: 1,
+                  <div className="upload-container" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'center' }}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <input
+                        type="file"
+                        id="fileInput"
+                        accept=".xlsx,.xls"
+                        onChange={handleFileUpload}
+                        style={{
+                          position: 'absolute',
+                          opacity: 0,
+                          width: '100%',
+                          height: '100%',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <div style={{
                         padding: '0.75rem',
                         background: 'white',
                         border: 'none',
                         borderRadius: '8px',
-                        cursor: 'pointer',
                         color: '#333',
-                        fontWeight: '500'
-                      }}
-                    />
+                        fontWeight: '500',
+                        pointerEvents: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}>
+                        <span style={{
+                          padding: '0.4rem 0.8rem',
+                          background: '#f0f0f0',
+                          borderRadius: '4px',
+                          fontSize: '0.85rem'
+                        }}>파일 선택</span>
+                        <span style={{ 
+                          flex: 1, 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap',
+                          color: uploadedFileName ? '#333' : '#999'
+                        }}>
+                          {uploadedFileName || '선택된 파일 없음'}
+                        </span>
+                      </div>
+                    </div>
                     <button
                       onClick={downloadTemplate}
                       className="desktop-template-btn"
@@ -2252,6 +2337,74 @@
                         }}>
                           <div>총 {cls.students.length}명</div>
                           <div>남성 {cls.maleCount}명 / 여성 {cls.femaleCount}명</div>
+                          
+                          {/* 특이사항 통계 */}
+                          {(() => {
+                            const specialStats = {};
+                            cls.students.forEach(student => {
+                              const notes = studentSpecialNotes[student.id] || [];
+                              const isMale = student.gender === '남성' || student.gender === '남' || student.gender === 'M';
+                              
+                              notes.forEach(note => {
+                                if (!specialStats[note]) {
+                                  specialStats[note] = { male: 0, female: 0 };
+                                }
+                                if (isMale) {
+                                  specialStats[note].male++;
+                                } else {
+                                  specialStats[note].female++;
+                                }
+                              });
+                            });
+                            
+                            // 특이사항 순서 고정
+                            const noteOrder = ['운동부', '도움반', '쌍생아', '다문화'];
+                            const orderedStats = noteOrder
+                              .filter(note => specialStats[note])
+                              .map(note => [note, specialStats[note]]);
+                            
+                            if (orderedStats.length === 0) return null;
+                            
+                            return (
+                              <div style={{ 
+                                marginTop: '0.5rem', 
+                                paddingTop: '0.5rem', 
+                                borderTop: '1px solid rgba(255,255,255,0.3)',
+                                fontSize: '0.85rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.4rem'
+                              }}>
+                                {orderedStats.map(([note, counts]) => {
+                                  const parts = [];
+                                  if (counts.male > 0) parts.push(`남성 ${counts.male}명`);
+                                  if (counts.female > 0) parts.push(`여성 ${counts.female}명`);
+                                  return (
+                                    <div key={note} style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.4rem'
+                                    }}>
+                                      <span style={{
+                                        background: 'linear-gradient(135deg, #ff9a56 0%, #ff6b6b 100%)',
+                                        color: 'white',
+                                        padding: '0.2rem 0.5rem',
+                                        borderRadius: '4px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '600',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        {note}
+                                      </span>
+                                      <span style={{ color: '#333', fontWeight: '500' }}>
+                                        {parts.join(', ')}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div style={{
@@ -2807,6 +2960,7 @@
               </span>
             </div>
           </div>
+        </div>
         </div>
       );
     }
